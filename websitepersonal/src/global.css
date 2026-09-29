@@ -115,6 +115,7 @@ button:disabled {
 .actions,
 .edit-tools {
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .composer {
@@ -138,6 +139,19 @@ button:disabled {
   color: white;
   text-decoration: none;
   font-weight: 700;
+}
+
+.btn.outline {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+}
+
+.auth-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
 }
 
 .btn.green {

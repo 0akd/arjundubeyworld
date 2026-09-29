@@ -77,10 +77,41 @@ function collectionUrl(userId: string): string {
 export interface VaultFile {
   id: string;
   user_id: string;
+  parent_id: string;
+  type: string;
   file_name: string;
   mime_type: string;
   data: string;
+  timestamp: number;
   created_at: string | null;
+}
+
+export interface VaultFileInput {
+  parent_id: string;
+  type: string;
+  file_name: string;
+  mime_type: string;
+  data: string;
+  timestamp: number;
+}
+
+export type VaultFilePatch = {
+  parent_id?: string;
+  type?: string;
+  file_name?: string;
+  timestamp?: number;
+};
+
+export function normalizeVaultFile(file: VaultFile): VaultFile {
+  const rawTimestamp = file.timestamp as unknown;
+  const timestamp =
+    typeof rawTimestamp === "number" ? rawTimestamp : Number(rawTimestamp);
+  return {
+    ...file,
+    parent_id: typeof file.parent_id === "string" ? file.parent_id : "",
+    type: file.type === "FOLDER" ? "FOLDER" : file.type || "FILE",
+    timestamp: Number.isFinite(timestamp) ? Math.trunc(timestamp) : 0,
+  };
 }
 
 export async function getVaultFiles(
@@ -92,13 +123,14 @@ export async function getVaultFiles(
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!response.ok) await fail(response, "Failed to fetch files");
-  return response.json() as Promise<VaultFile[]>;
+  const files = (await response.json()) as VaultFile[];
+  return files.map(normalizeVaultFile);
 }
 
 export async function createVaultFile(
   token: string,
   userId: string,
-  data: { file_name: string; mime_type: string; data: string },
+  data: VaultFileInput,
 ): Promise<VaultFile> {
   const response = await fetch(
     `${API_BASE_URL}/users/${encodeURIComponent(userId)}/vault`,
@@ -109,7 +141,24 @@ export async function createVaultFile(
     },
   );
   if (!response.ok) await fail(response, "Failed to upload file");
-  return response.json() as Promise<VaultFile>;
+  return normalizeVaultFile((await response.json()) as VaultFile);
+}
+
+export async function updateVaultFile(
+  token: string,
+  userId: string,
+  fileId: string,
+  patch: VaultFilePatch,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/users/${encodeURIComponent(userId)}/vault/${encodeURIComponent(fileId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(patch),
+    },
+  );
+  if (!response.ok) await fail(response, "Failed to update file");
 }
 
 export async function deleteVaultFile(

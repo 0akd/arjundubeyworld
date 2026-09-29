@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,8 +59,7 @@ fun TodoListScreen(
     userId: String,
     uiScale: Float,
     onUiScaleChange: (Float) -> Unit,
-    onSignOut: () -> Unit,
-    onNavigateToVault: () -> Unit,
+    onOpenDrawer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val api = remember { TodoApiClient() }
@@ -135,6 +135,9 @@ fun TodoListScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                IconButton(onClick = onOpenDrawer) {
+                    Icon(Icons.Default.Menu, contentDescription = "Menu")
+                }
                 if (currentFolderId.isNotEmpty()) {
                     IconButton(onClick = {
                         val parentId = currentFolder?.parentId ?: ""
@@ -190,12 +193,6 @@ fun TodoListScreen(
                 IconButton(onClick = { showSettingsDialog = true }) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }
-
-                TextButton(onClick = onNavigateToVault) {
-                    Text("Vault")
-                }
-
-                Button(onClick = onSignOut) { Text("Sign Out") }
             }
         }
 

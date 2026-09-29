@@ -17,6 +17,8 @@ import {
   deleteVaultFile,
   listVaultFiles,
   parseFileBody,
+  parseVaultPatchBody,
+  updateVaultFile,
 } from './turso'
 
 type Bindings = {
@@ -146,6 +148,25 @@ app.post('/api/users/:userId/vault', async (c) => {
     return c.json(await createVaultFile(c.env, userId, parsed.value), 201)
   } catch (error) {
     return tursoFailure(c, error, 'Failed to insert into Turso')
+  }
+})
+
+app.patch('/api/users/:userId/vault/:fileId', async (c) => {
+  const userId = c.req.param('userId')
+  const fileId = c.req.param('fileId')
+  const denied = gate(c, userId)
+  if (denied) return denied
+
+  const body = await readJson(c)
+  if (body instanceof Response) return body
+  const parsed = parseVaultPatchBody(body)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+
+  try {
+    await updateVaultFile(c.env, userId, fileId, parsed.value)
+    return c.body(null, 204)
+  } catch (error) {
+    return tursoFailure(c, error, 'Failed to update vault file')
   }
 })
 

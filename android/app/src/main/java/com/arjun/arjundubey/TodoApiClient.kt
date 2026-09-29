@@ -89,6 +89,14 @@ class TodoApiClient(
         return TodoJson.json.decodeFromString(body)
     }
 
+    suspend fun updateVaultFile(userId: String, fileId: String, patch: VaultFilePatch) {
+        request(
+            "PATCH",
+            "$baseUrl/users/${pathSegment(userId)}/vault/${pathSegment(fileId)}",
+            TodoJson.json.encodeToString(patch),
+        )
+    }
+
     suspend fun deleteVaultFile(userId: String, fileId: String) {
         request(
             "DELETE",
@@ -186,15 +194,29 @@ class TodoApiClient(
 data class VaultFile(
     val id: String,
     @SerialName("user_id") val userId: String,
+    @SerialName("parent_id") val parentId: String = "",
+    val type: String = "FILE",
     @SerialName("file_name") val fileName: String,
     @SerialName("mime_type") val mimeType: String,
     val data: String,
+    val timestamp: Long = 0,
     @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable
 data class VaultFileUpload(
+    @SerialName("parent_id") val parentId: String,
+    val type: String,
     @SerialName("file_name") val fileName: String,
     @SerialName("mime_type") val mimeType: String,
     val data: String,
+    val timestamp: Long,
+)
+
+@Serializable
+data class VaultFilePatch(
+    @SerialName("parent_id") val parentId: String? = null,
+    val type: String? = null,
+    @SerialName("file_name") val fileName: String? = null,
+    val timestamp: Long? = null,
 )
