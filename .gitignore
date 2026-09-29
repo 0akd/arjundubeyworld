@@ -33,7 +33,6 @@ dist/
 # =========================
 # Gradle cache and wrappers
 .gradle/
-!gradle/wrapper/gradle-wrapper.jar
 
 # Build output directories
 build/
@@ -50,6 +49,9 @@ google-services.json
 *.ap_
 *.jar
 *.flat
+
+# Explicitly un-ignore gradle wrapper jar (MUST BE AFTER *.jar)
+!gradle/wrapper/gradle-wrapper.jar
 
 # =========================
 # IDEs & OS Files

@@ -1,9 +1,21 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+// Override with api.base.url in local.properties. Emulator + `wrangler dev`: http://10.0.2.2:8787/api
+val apiBaseUrl = localProperties.getProperty("api.base.url")?.trim()?.takeIf { it.isNotEmpty() }
+    ?: "https://my-app.atrikumar31.workers.dev/api"
 
 android {
     namespace = "com.arjun.arjundubey"
@@ -19,6 +31,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "API_BASE_URL", apiBaseUrl.toBuildConfigString())
     }
 
     buildTypes {
@@ -36,15 +49,19 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
+
+fun String.toBuildConfigString(): String =
+    "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.firestore)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

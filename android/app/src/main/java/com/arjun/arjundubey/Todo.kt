@@ -1,5 +1,8 @@
 package com.arjun.arjundubey
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Todo @JvmOverloads constructor(
     var id: String = "",
     var parentId: String = "", // Empty string means it's in the root folder

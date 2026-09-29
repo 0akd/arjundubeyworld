@@ -37,18 +37,21 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import com.arjun.arjundubey.whiteboard.WhiteboardScreen
-import com.google.firebase.firestore.CollectionReference
-import com.google.firebase.firestore.FirebaseFirestore
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
 fun TodoListScreen(
@@ -58,11 +61,14 @@ fun TodoListScreen(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val db = FirebaseFirestore.getInstance()
-    val todosCollection = db.collection("users").document(userId).collection("todos")
+    val api = remember { TodoApiClient() }
+    val scope = rememberCoroutineScope()
 
     var allNodes by remember { mutableStateOf<List<Todo>>(emptyList()) }
     var newTaskText by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var refreshKey by remember { mutableIntStateOf(0) }
 
     var currentFolderId by remember { mutableStateOf("") }
     var isEditMode by remember { mutableStateOf(false) }
@@ -75,15 +81,31 @@ fun TodoListScreen(
     var clipboardNode by remember { mutableStateOf<Todo?>(null) }
     var isCutOperation by remember { mutableStateOf(false) }
 
-    DisposableEffect(userId) {
-        val listener = todosCollection
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
-                if (snapshot != null) {
-                    allNodes = snapshot.documents.mapNotNull { it.toObject(Todo::class.java) }
-                }
+    LaunchedEffect(userId, refreshKey) {
+        if (refreshKey == 0) isLoading = true
+        try {
+            allNodes = api.getTodos(userId)
+            loadError = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            loadError = e.message ?: "Could not load tasks"
+        } finally {
+            isLoading = false
+        }
+    }
+
+    fun persist(block: suspend () -> Unit) {
+        scope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loadError = e.message ?: "Could not save changes"
+                refreshKey++
             }
-        onDispose { listener.remove() }
+        }
     }
 
     val currentFolder = allNodes.find { it.id == currentFolderId }
@@ -91,16 +113,17 @@ fun TodoListScreen(
     val whiteboardTodo = allNodes.find { it.id == whiteboardTodoId }
 
     if (whiteboardTodo != null) {
+        val openTodoId = whiteboardTodo.id
+        val saveWhiteboard = { json: String ->
+            allNodes = allNodes.map { if (it.id == openTodoId) it.copy(whiteboardJson = json) else it }
+            persist { api.updateTodo(userId, openTodoId, TodoPatch(whiteboardJson = json)) }
+        }
         WhiteboardScreen(
             todo = whiteboardTodo,
             modifier = modifier,
             onDismiss = { whiteboardTodoId = null },
-            onSave = { json ->
-                todosCollection.document(whiteboardTodo.id).update("whiteboardJson", json)
-            },
-            onAutoSave = { json ->
-                todosCollection.document(whiteboardTodo.id).update("whiteboardJson", json)
-            }
+            onSave = saveWhiteboard,
+            onAutoSave = saveWhiteboard
         )
     } else {
         Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -125,16 +148,24 @@ fun TodoListScreen(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (clipboardNode != null && isEditMode) {
-                    val canPaste = isValidPaste(currentFolderId, clipboardNode!!.id, allNodes)
+                val clipped = clipboardNode
+                if (clipped != null && isEditMode) {
+                    val canPaste = isValidPaste(currentFolderId, clipped.id, allNodes)
                     TextButton(
                         enabled = canPaste,
                         onClick = {
                             if (isCutOperation) {
-                                todosCollection.document(clipboardNode!!.id).update("parentId", currentFolderId)
+                                allNodes = allNodes.map {
+                                    if (it.id == clipped.id) it.copy(parentId = currentFolderId) else it
+                                }
                                 clipboardNode = null
+                                persist { api.updateTodo(userId, clipped.id, TodoPatch(parentId = currentFolderId)) }
                             } else {
-                                performCopy(clipboardNode!!, currentFolderId, todosCollection, allNodes)
+                                val copies = duplicateTree(clipped, currentFolderId, allNodes)
+                                allNodes = allNodes + copies
+                                persist {
+                                    for (copy in copies) api.createTodo(userId, copy)
+                                }
                             }
                         }
                     ) {
@@ -161,6 +192,19 @@ fun TodoListScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val errorMessage = loadError
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        } else if (isLoading && allNodes.isEmpty()) {
+            Text("Loading tasks...")
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         if (isEditMode) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
@@ -174,10 +218,10 @@ fun TodoListScreen(
                 Button(
                     enabled = newTaskText.isNotBlank(),
                     onClick = {
-                        val docRef = todosCollection.document()
-                        val todo = Todo(id = docRef.id, parentId = currentFolderId, type = "TODO", task = newTaskText)
-                        docRef.set(todo)
+                        val todo = newNode(currentFolderId, "TODO", newTaskText)
+                        allNodes = allNodes + todo
                         newTaskText = ""
+                        persist { api.createTodo(userId, todo) }
                     }
                 ) {
                     Text("Task")
@@ -186,10 +230,10 @@ fun TodoListScreen(
                 Button(
                     enabled = newTaskText.isNotBlank(),
                     onClick = {
-                        val docRef = todosCollection.document()
-                        val folder = Todo(id = docRef.id, parentId = currentFolderId, type = "FOLDER", task = newTaskText)
-                        docRef.set(folder)
+                        val folder = newNode(currentFolderId, "FOLDER", newTaskText)
+                        allNodes = allNodes + folder
                         newTaskText = ""
+                        persist { api.createTodo(userId, folder) }
                     }
                 ) {
                     Text("Folder")
@@ -220,8 +264,17 @@ fun TodoListScreen(
                         } else {
                             Pair(prevTime, currTime)
                         }
-                        todosCollection.document(node.id).update("timestamp", newCurrTime)
-                        todosCollection.document(prevNode.id).update("timestamp", newPrevTime)
+                        allNodes = allNodes.map {
+                            when (it.id) {
+                                node.id -> it.copy(timestamp = newCurrTime)
+                                prevNode.id -> it.copy(timestamp = newPrevTime)
+                                else -> it
+                            }
+                        }
+                        persist {
+                            api.updateTodo(userId, node.id, TodoPatch(timestamp = newCurrTime))
+                            api.updateTodo(userId, prevNode.id, TodoPatch(timestamp = newPrevTime))
+                        }
                     },
                     onMoveDown = {
                         val nextNode = displayNodes[index + 1]
@@ -232,11 +285,23 @@ fun TodoListScreen(
                         } else {
                             Pair(nextTime, currTime)
                         }
-                        todosCollection.document(node.id).update("timestamp", newCurrTime)
-                        todosCollection.document(nextNode.id).update("timestamp", newNextTime)
+                        allNodes = allNodes.map {
+                            when (it.id) {
+                                node.id -> it.copy(timestamp = newCurrTime)
+                                nextNode.id -> it.copy(timestamp = newNextTime)
+                                else -> it
+                            }
+                        }
+                        persist {
+                            api.updateTodo(userId, node.id, TodoPatch(timestamp = newCurrTime))
+                            api.updateTodo(userId, nextNode.id, TodoPatch(timestamp = newNextTime))
+                        }
                     },
                     onToggle = { isChecked ->
-                        todosCollection.document(node.id).update("isCompleted", isChecked)
+                        allNodes = allNodes.map {
+                            if (it.id == node.id) it.copy(isCompleted = isChecked) else it
+                        }
+                        persist { api.updateTodo(userId, node.id, TodoPatch(isCompleted = isChecked)) }
                     },
                     onClickFolder = {
                         currentFolderId = node.id
@@ -248,7 +313,12 @@ fun TodoListScreen(
                         whiteboardTodoId = node.id
                     },
                     onDelete = {
-                        performDelete(node.id, todosCollection, allNodes)
+                        val ids = collectDeleteOrder(node.id, allNodes)
+                        val remove = ids.toSet()
+                        allNodes = allNodes.filter { it.id !in remove }
+                        persist {
+                            for (id in ids) api.deleteTodo(userId, id)
+                        }
                     },
                     onCut = {
                         clipboardNode = node
@@ -297,18 +367,22 @@ fun TodoListScreen(
             isEditMode = isEditMode,
             onDismiss = { selectedTodoId = null },
             onUpdateSteps = { newSteps ->
-                todosCollection.document(selectedTodo.id).update("steps", newSteps)
+                val todoId = selectedTodo.id
+                allNodes = allNodes.map { if (it.id == todoId) it.copy(steps = newSteps) else it }
+                persist { api.updateTodo(userId, todoId, TodoPatch(steps = newSteps)) }
             }
         )
     }
 
     if (nodeToRename != null) {
+        val renaming = nodeToRename!!
         RenameDialog(
-            todo = nodeToRename!!,
+            todo = renaming,
             onDismiss = { nodeToRename = null },
             onRenameConfirm = { newName ->
-                todosCollection.document(nodeToRename!!.id).update("task", newName)
+                allNodes = allNodes.map { if (it.id == renaming.id) it.copy(task = newName) else it }
                 nodeToRename = null
+                persist { api.updateTodo(userId, renaming.id, TodoPatch(task = newName)) }
             }
         )
     }
@@ -630,23 +704,28 @@ fun StepsDialog(
     }
 }
 
-fun performDelete(nodeId: String, collection: CollectionReference, currentNodesList: List<Todo>) {
-    collection.document(nodeId).delete()
-    currentNodesList.filter { it.parentId == nodeId }.forEach { child ->
-        performDelete(child.id, collection, currentNodesList)
-    }
+private fun newNode(parentId: String, type: String, task: String) = Todo(
+    id = UUID.randomUUID().toString(),
+    parentId = parentId,
+    type = type,
+    task = task,
+    timestamp = System.currentTimeMillis(),
+)
+
+private fun duplicateTree(node: Todo, newParentId: String, nodes: List<Todo>): List<Todo> {
+    val copy = node.copy(
+        id = UUID.randomUUID().toString(),
+        parentId = newParentId,
+        timestamp = System.currentTimeMillis(),
+    )
+    if (node.type != "FOLDER") return listOf(copy)
+    val children = nodes.filter { it.parentId == node.id }
+    return listOf(copy) + children.flatMap { duplicateTree(it, copy.id, nodes) }
 }
 
-fun performCopy(node: Todo, newParentId: String, collection: CollectionReference, currentNodesList: List<Todo>) {
-    val newId = collection.document().id
-    val newNode = node.copy(id = newId, parentId = newParentId, timestamp = System.currentTimeMillis())
-    collection.document(newId).set(newNode)
-
-    if (node.type == "FOLDER") {
-        currentNodesList.filter { it.parentId == node.id }.forEach { child ->
-            performCopy(child, newId, collection, currentNodesList)
-        }
-    }
+private fun collectDeleteOrder(nodeId: String, nodes: List<Todo>): List<String> {
+    val children = nodes.filter { it.parentId == nodeId }
+    return children.flatMap { collectDeleteOrder(it.id, nodes) } + nodeId
 }
 
 fun isValidPaste(targetFolderId: String, clipboardId: String, allNodes: List<Todo>): Boolean {
