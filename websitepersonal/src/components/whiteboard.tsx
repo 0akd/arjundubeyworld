@@ -10,6 +10,10 @@ import {
 import { paintWhiteboard } from "../whiteboard-paint";
 import {
   BLACK_ARGB,
+  ERASER_DEFAULT,
+  ERASER_MAX,
+  ERASER_MIN,
+  PEN_WIDTH,
   WHITE_ARGB,
   addSlide,
   clearCurrentSlide,
@@ -45,7 +49,7 @@ export const WebWhiteboard = component$((props: WhiteboardProps) => {
   const state = useStore({
     loadedId: "",
     erasing: false,
-    eraserWidth: 50,
+    eraserWidth: ERASER_DEFAULT,
     showControls: true,
     dirty: false,
     dark: false,
@@ -114,8 +118,7 @@ export const WebWhiteboard = component$((props: WhiteboardProps) => {
     const stroke: Stroke = {
       points,
       colorArgb: state.dark ? WHITE_ARGB : BLACK_ARGB,
-      strokeWidth:
-        (state.erasing ? state.eraserWidth : 8) / (canvas.clientWidth || 1),
+      strokeWidth: state.erasing ? state.eraserWidth : PEN_WIDTH,
       isEraser: state.erasing,
       isNormalized: true,
     };
@@ -191,8 +194,9 @@ export const WebWhiteboard = component$((props: WhiteboardProps) => {
                 Size
                 <input
                   type="range"
-                  min={10}
-                  max={100}
+                  min={ERASER_MIN}
+                  max={ERASER_MAX}
+                  step={0.005}
                   value={state.eraserWidth}
                   onInput$={(_, element) => {
                     state.eraserWidth = Number(element.value);

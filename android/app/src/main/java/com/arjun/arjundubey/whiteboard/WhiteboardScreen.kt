@@ -9,9 +9,11 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,7 +93,7 @@ fun WhiteboardScreen(
     val isBlackboard = isSystemInDarkTheme()
     val defaultDrawingColor = if (isBlackboard) Color.White else Color.Black
 
-    var localEraserWidth by remember { mutableFloatStateOf(50f) }
+    var localEraserWidth by remember { mutableFloatStateOf(WhiteboardSpec.ERASER_DEFAULT) }
     var showControls by remember { mutableStateOf(true) }
     var hasUnsavedChanges by remember { mutableStateOf(false) }
 
@@ -158,7 +160,6 @@ fun WhiteboardScreen(
     val pagerState = rememberPagerState(pageCount = { slides.size })
     var currentPoints by remember { mutableStateOf<List<Point>>(emptyList()) }
     var isErasing by remember { mutableStateOf(false) }
-    val currentWidth = 8f
 
     LaunchedEffect(slides.size) {
         if (slides.isNotEmpty() && pagerState.currentPage >= slides.size) {
@@ -182,103 +183,115 @@ fun WhiteboardScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(if (isBlackboard) Color(0xFF121212) else Color.White)
-                                .pointerInput(isErasing, localEraserWidth, pagerState.currentPage, defaultDrawingColor) {
-                                    detectDragGestures(
-                                        onDragStart = { offset ->
-                                            val cw = size.width.toFloat()
-                                            val ch = size.height.toFloat()
-                                            if (cw > 0 && ch > 0) {
-                                                currentPoints = listOf(Point(offset.x / cw, offset.y / ch))
-                                            }
-                                        },
-                                        onDrag = { change, _ ->
-                                            val cw = size.width.toFloat()
-                                            val ch = size.height.toFloat()
-                                            if (cw > 0 && ch > 0) {
-                                                currentPoints = currentPoints + Point(change.position.x / cw, change.position.y / ch)
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            if (currentPoints.size > 1) {
-                                                val cw = size.width.toFloat()
-                                                val simplifiedPoints = if (currentPoints.size > 10) {
-                                                    currentPoints.filterIndexed { i, p ->
-                                                        i == 0 || i == currentPoints.lastIndex || (kotlin.math.abs(p.x - currentPoints[i - 1].x) > 0.002f || kotlin.math.abs(p.y - currentPoints[i - 1].y) > 0.002f)
-                                                    }
-                                                } else currentPoints
-                                                val newStroke = Stroke(
-                                                    points = simplifiedPoints,
-                                                    colorArgb = defaultDrawingColor.toArgb(),
-                                                    strokeWidth = (if (isErasing) localEraserWidth else currentWidth) / cw,
-                                                    isEraser = isErasing,
-                                                    isNormalized = true,
-                                                )
-                                                val updated = slides.mapIndexed { index, s ->
-                                                    if (index == page) s.copy(strokes = s.strokes + newStroke) else s
-                                                }
-                                                updateSlides(updated)
-                                                hasUnsavedChanges = true
-                                                scheduleAutoSave()
-                                            }
-                                            currentPoints = emptyList()
-                                        },
-                                    )
-                                },
+                                .background(if (isBlackboard) Color(0xFF121212) else Color.White),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Canvas(
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen),
+                                    .aspectRatio(1f)
+                                    .border(1.dp, Color.Gray)
+                                    .pointerInput(isErasing, localEraserWidth, pagerState.currentPage, defaultDrawingColor) {
+                                        detectDragGestures(
+                                            onDragStart = { offset ->
+                                                val side = size.width.toFloat()
+                                                if (side > 0) {
+                                                    currentPoints = listOf(
+                                                        Point(
+                                                            (offset.x / side).coerceIn(0f, 1f),
+                                                            (offset.y / side).coerceIn(0f, 1f),
+                                                        ),
+                                                    )
+                                                }
+                                            },
+                                            onDrag = { change, _ ->
+                                                val side = size.width.toFloat()
+                                                if (side > 0) {
+                                                    currentPoints = currentPoints + Point(
+                                                        (change.position.x / side).coerceIn(0f, 1f),
+                                                        (change.position.y / side).coerceIn(0f, 1f),
+                                                    )
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                if (currentPoints.size > 1) {
+                                                    val simplified = if (currentPoints.size > 10) {
+                                                        currentPoints.filterIndexed { i, p ->
+                                                            i == 0 || i == currentPoints.lastIndex ||
+                                                                kotlin.math.abs(p.x - currentPoints[i - 1].x) > 0.002f ||
+                                                                kotlin.math.abs(p.y - currentPoints[i - 1].y) > 0.002f
+                                                        }
+                                                    } else currentPoints
+                                                    val newStroke = Stroke(
+                                                        points = simplified,
+                                                        colorArgb = defaultDrawingColor.toArgb(),
+                                                        strokeWidth = if (isErasing) localEraserWidth else WhiteboardSpec.PEN_WIDTH,
+                                                        isEraser = isErasing,
+                                                        isNormalized = true,
+                                                    )
+                                                    updateSlides(
+                                                        slides.mapIndexed { index, s ->
+                                                            if (index == page) s.copy(strokes = s.strokes + newStroke) else s
+                                                        },
+                                                    )
+                                                    hasUnsavedChanges = true
+                                                    scheduleAutoSave()
+                                                }
+                                                currentPoints = emptyList()
+                                            },
+                                        )
+                                    },
                             ) {
-                                val canvasWidthPx = size.width
-                                val canvasHeightPx = size.height
-                                slide.strokes.forEach { stroke ->
-                                    if (stroke.points.size < 2) return@forEach
-                                    val path = Path().apply {
-                                        val first = stroke.points.first()
-                                        if (stroke.isNormalized) {
-                                            moveTo(first.x * canvasWidthPx, first.y * canvasHeightPx)
-                                            stroke.points.drop(1).forEach { lineTo(it.x * canvasWidthPx, it.y * canvasHeightPx) }
-                                        } else {
-                                            moveTo(first.x, first.y)
-                                            stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
+                                Canvas(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen),
+                                ) {
+                                    val side = size.width
+                                    slide.strokes.forEach { stroke ->
+                                        if (stroke.points.size < 2) return@forEach
+                                        val path = Path().apply {
+                                            val first = stroke.points.first()
+                                            if (stroke.isNormalized) {
+                                                moveTo(first.x * side, first.y * side)
+                                                stroke.points.drop(1).forEach { lineTo(it.x * side, it.y * side) }
+                                            } else {
+                                                moveTo(first.x, first.y)
+                                                stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
+                                            }
                                         }
+                                        val rawColor = Color(stroke.colorArgb)
+                                        val renderColor = when {
+                                            isBlackboard && rawColor == Color.Black -> Color.White
+                                            !isBlackboard && rawColor == Color.White -> Color.Black
+                                            else -> rawColor
+                                        }
+                                        drawPath(
+                                            path = path,
+                                            color = renderColor,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                                width = if (stroke.isNormalized) stroke.strokeWidth * side else stroke.strokeWidth,
+                                                cap = StrokeCap.Round,
+                                                join = StrokeJoin.Round,
+                                            ),
+                                            blendMode = if (stroke.isEraser) BlendMode.Clear else BlendMode.SrcOver,
+                                        )
                                     }
-
-                                    val rawColor = Color(stroke.colorArgb)
-                                    val renderColor = when {
-                                        isBlackboard && rawColor == Color.Black -> Color.White
-                                        !isBlackboard && rawColor == Color.White -> Color.Black
-                                        else -> rawColor
+                                    if (page == pagerState.currentPage && currentPoints.size >= 2) {
+                                        val path = Path().apply {
+                                            moveTo(currentPoints.first().x * side, currentPoints.first().y * side)
+                                            currentPoints.drop(1).forEach { lineTo(it.x * side, it.y * side) }
+                                        }
+                                        drawPath(
+                                            path = path,
+                                            color = defaultDrawingColor,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                                width = (if (isErasing) localEraserWidth else WhiteboardSpec.PEN_WIDTH) * side,
+                                                cap = StrokeCap.Round,
+                                                join = StrokeJoin.Round,
+                                            ),
+                                            blendMode = if (isErasing) BlendMode.Clear else BlendMode.SrcOver,
+                                        )
                                     }
-
-                                    drawPath(
-                                        path = path,
-                                        color = renderColor,
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                            width = if (stroke.isNormalized) stroke.strokeWidth * canvasWidthPx else stroke.strokeWidth,
-                                            cap = StrokeCap.Round,
-                                            join = StrokeJoin.Round,
-                                        ),
-                                        blendMode = if (stroke.isEraser) BlendMode.Clear else BlendMode.SrcOver,
-                                    )
-                                }
-                                if (page == pagerState.currentPage && currentPoints.size >= 2) {
-                                    val path = Path().apply {
-                                        moveTo(currentPoints.first().x * canvasWidthPx, currentPoints.first().y * canvasHeightPx)
-                                        currentPoints.drop(1).forEach { lineTo(it.x * canvasWidthPx, it.y * canvasHeightPx) }
-                                    }
-                                    drawPath(
-                                        path = path,
-                                        color = defaultDrawingColor,
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                            width = (if (isErasing) localEraserWidth else currentWidth),
-                                            cap = StrokeCap.Round,
-                                            join = StrokeJoin.Round,
-                                        ),
-                                        blendMode = if (isErasing) BlendMode.Clear else BlendMode.SrcOver,
-                                    )
                                 }
                             }
                         }
@@ -308,7 +321,7 @@ fun WhiteboardScreen(
                                 Slider(
                                     value = localEraserWidth,
                                     onValueChange = { localEraserWidth = it },
-                                    valueRange = 10f..100f,
+                                    valueRange = WhiteboardSpec.ERASER_MIN..WhiteboardSpec.ERASER_MAX,
                                     modifier = Modifier.weight(1f),
                                 )
                             }

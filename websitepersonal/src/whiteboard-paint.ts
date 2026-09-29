@@ -1,5 +1,6 @@
 import {
   BLACK_ARGB,
+  PEN_WIDTH,
   WHITE_ARGB,
   cssFromArgb,
   type Point,
@@ -45,14 +46,13 @@ export function paintWhiteboard(canvas: HTMLCanvasElement, input: PaintInput) {
       {
         points: [...input.draft],
         colorArgb: input.dark ? WHITE_ARGB : BLACK_ARGB,
-        strokeWidth: input.erasing ? input.eraserWidth : 8,
+        strokeWidth: input.erasing ? input.eraserWidth : PEN_WIDTH,
         isEraser: input.erasing,
-        isNormalized: false,
+        isNormalized: true,
       },
       cssWidth,
       cssHeight,
       input.dark,
-      true,
     );
   }
 }
@@ -63,7 +63,6 @@ function drawStroke(
   cssWidth: number,
   cssHeight: number,
   dark: boolean,
-  draft = false,
 ) {
   if (stroke.points.length < 2) return;
   context.save();
@@ -73,42 +72,31 @@ function drawStroke(
   context.strokeStyle = stroke.isEraser
     ? "rgba(0,0,0,1)"
     : inkColor(stroke.colorArgb, dark);
-  context.lineWidth =
-    draft || !stroke.isNormalized
-      ? stroke.strokeWidth
-      : stroke.strokeWidth * cssWidth;
+  context.lineWidth = stroke.isNormalized
+    ? stroke.strokeWidth * cssWidth
+    : stroke.strokeWidth;
   context.beginPath();
   const first = stroke.points[0];
   context.moveTo(
-    scaleX(first, stroke, cssWidth, draft),
-    scaleY(first, stroke, cssHeight, draft),
+    scaleX(first, stroke, cssWidth),
+    scaleY(first, stroke, cssHeight),
   );
   for (const point of stroke.points.slice(1)) {
     context.lineTo(
-      scaleX(point, stroke, cssWidth, draft),
-      scaleY(point, stroke, cssHeight, draft),
+      scaleX(point, stroke, cssWidth),
+      scaleY(point, stroke, cssHeight),
     );
   }
   context.stroke();
   context.restore();
 }
 
-function scaleX(
-  point: Point,
-  stroke: Stroke,
-  cssWidth: number,
-  draft: boolean,
-): number {
-  return draft || stroke.isNormalized ? point.x * cssWidth : point.x;
+function scaleX(point: Point, stroke: Stroke, cssWidth: number): number {
+  return stroke.isNormalized ? point.x * cssWidth : point.x;
 }
 
-function scaleY(
-  point: Point,
-  stroke: Stroke,
-  cssHeight: number,
-  draft: boolean,
-): number {
-  return draft || stroke.isNormalized ? point.y * cssHeight : point.y;
+function scaleY(point: Point, stroke: Stroke, cssHeight: number): number {
+  return stroke.isNormalized ? point.y * cssHeight : point.y;
 }
 
 function inkColor(color: number, dark: boolean): string {

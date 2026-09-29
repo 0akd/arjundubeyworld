@@ -32,6 +32,12 @@ export interface BoardHistory {
 export const BLACK_ARGB = argb(0, 0, 0);
 export const WHITE_ARGB = argb(255, 255, 255);
 
+/** Fractions of the square board side. See WHITEBOARD_SPEC.md. */
+export const PEN_WIDTH = 0.006;
+export const ERASER_MIN = 0.01;
+export const ERASER_MAX = 0.12;
+export const ERASER_DEFAULT = 0.05;
+
 export function argb(
   red: number,
   green: number,

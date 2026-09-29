@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { collectDeleteOrder, displayTodos, duplicateTree, isValidPaste, reorderTimestamps } from "./todo-tree";
 import {
   BLACK_ARGB,
+  ERASER_DEFAULT,
+  ERASER_MAX,
+  ERASER_MIN,
+  PEN_WIDTH,
   WHITE_ARGB,
   argb,
   parseWhiteboard,
@@ -75,6 +79,40 @@ const saved = parseWhiteboard(
 );
 assert.equal(saved.slides[0].strokes[0].isNormalized, true);
 assert.equal(JSON.parse(serializeWhiteboard(saved)).version, 2);
+
+assert.equal(PEN_WIDTH, 0.006);
+assert.equal(ERASER_MIN, 0.01);
+assert.equal(ERASER_MAX, 0.12);
+assert.equal(ERASER_DEFAULT, 0.05);
+const golden = parseWhiteboard(
+  JSON.stringify({
+    version: 2,
+    slides: [
+      {
+        id: 1,
+        title: "Slide 1",
+        strokes: [
+          {
+            points: [
+              { x: 0.2, y: 0.2 },
+              { x: 0.8, y: 0.8 },
+            ],
+            colorArgb: -16777216,
+            strokeWidth: PEN_WIDTH,
+            isEraser: false,
+            isNormalized: true,
+          },
+        ],
+      },
+    ],
+  }),
+);
+const goldenStroke = golden.slides[0].strokes[0];
+assert.equal(goldenStroke.strokeWidth, PEN_WIDTH);
+assert.equal(goldenStroke.isNormalized, true);
+assert.equal(goldenStroke.colorArgb, BLACK_ARGB);
+assert.ok(goldenStroke.points.every((point) => point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1));
+assert.equal(JSON.parse(serializeWhiteboard(golden)).slides[0].strokes[0].strokeWidth, PEN_WIDTH);
 
 const legacySlides = parseWhiteboard(JSON.stringify([{ id: 2, title: "Old", strokes: [] }]));
 assert.equal(legacySlides.slides[0].title, "Old");
