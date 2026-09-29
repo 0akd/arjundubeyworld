@@ -310,6 +310,10 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.dark-code {
+  background: #f4f4f4;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     background: #111;
@@ -330,5 +334,9 @@ button:disabled {
     background: #1c1c1c;
     border-color: #444;
     color: inherit;
+  }
+
+  .dark-code {
+    background: #1c1c1c !important;
   }
 }

@@ -11,16 +11,28 @@ import {
   parsePatchBody,
   updateTodo,
 } from './firestore'
+import {
+  TursoConfigError,
+  createVaultFile,
+  deleteVaultFile,
+  listVaultFiles,
+  parseFileBody,
+} from './turso'
+
+type Bindings = {
+  TURSO_DATABASE_URL: string
+  TURSO_AUTH_TOKEN: string
+}
 
 type Variables = {
   token: string
   uid: string
 }
 
-type AppContext = Context<{ Variables: Variables }>
+type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>
 type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502
 
-const app = new Hono<{ Variables: Variables }>()
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
 app.get('/', (c) => c.text('Hello Hono!'))
 
@@ -111,6 +123,45 @@ app.delete('/api/users/:userId/todos/:todoId', async (c) => {
   }
 })
 
+app.get('/api/users/:userId/vault', async (c) => {
+  const userId = c.req.param('userId')
+  const denied = gate(c, userId)
+  if (denied) return denied
+  try {
+    return c.json(await listVaultFiles(c.env, userId))
+  } catch (error) {
+    return tursoFailure(c, error, 'Database request failed')
+  }
+})
+
+app.post('/api/users/:userId/vault', async (c) => {
+  const userId = c.req.param('userId')
+  const denied = gate(c, userId)
+  if (denied) return denied
+  const body = await readJson(c)
+  if (body instanceof Response) return body
+  const parsed = parseFileBody(body)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  try {
+    return c.json(await createVaultFile(c.env, userId, parsed.value), 201)
+  } catch (error) {
+    return tursoFailure(c, error, 'Failed to insert into Turso')
+  }
+})
+
+app.delete('/api/users/:userId/vault/:fileId', async (c) => {
+  const userId = c.req.param('userId')
+  const fileId = c.req.param('fileId')
+  const denied = gate(c, userId)
+  if (denied) return denied
+  try {
+    await deleteVaultFile(c.env, userId, fileId)
+    return c.body(null, 204)
+  } catch (error) {
+    return tursoFailure(c, error, 'Database request failed')
+  }
+})
+
 app.onError((error, c) => {
   console.error(error instanceof Error ? error.message : 'Unhandled error')
   return c.json({ error: 'Internal error' }, 500)
@@ -128,6 +179,12 @@ async function readJson(c: AppContext): Promise<unknown> {
   } catch {
     return c.json({ error: 'Invalid JSON body' }, 400)
   }
+}
+
+function tursoFailure(c: AppContext, error: unknown, fallback: string): Response {
+  if (error instanceof TursoConfigError) return c.json({ error: error.message }, 500)
+  console.error(error instanceof Error ? error.message : fallback)
+  return c.json({ error: fallback }, 502)
 }
 
 function firestoreFailure(c: AppContext, error: unknown): Response {

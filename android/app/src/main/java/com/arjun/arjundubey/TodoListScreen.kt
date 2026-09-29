@@ -59,6 +59,7 @@ fun TodoListScreen(
     uiScale: Float,
     onUiScaleChange: (Float) -> Unit,
     onSignOut: () -> Unit,
+    onNavigateToVault: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val api = remember { TodoApiClient() }
@@ -77,6 +78,7 @@ fun TodoListScreen(
     var whiteboardTodoId by remember { mutableStateOf<String?>(null) }
     var nodeToRename by remember { mutableStateOf<Todo?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    val actionScroll = rememberScrollState()
 
     var clipboardNode by remember { mutableStateOf<Todo?>(null) }
     var isCutOperation by remember { mutableStateOf(false) }
@@ -147,7 +149,10 @@ fun TodoListScreen(
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.horizontalScroll(actionScroll),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 val clipped = clipboardNode
                 if (clipped != null && isEditMode) {
                     val canPaste = isValidPaste(currentFolderId, clipped.id, allNodes)
@@ -184,6 +189,10 @@ fun TodoListScreen(
 
                 IconButton(onClick = { showSettingsDialog = true }) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings")
+                }
+
+                TextButton(onClick = onNavigateToVault) {
+                    Text("Vault")
                 }
 
                 Button(onClick = onSignOut) { Text("Sign Out") }

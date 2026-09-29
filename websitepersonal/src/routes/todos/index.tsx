@@ -6,7 +6,7 @@ import {
   useVisibleTask$,
   type QRL,
 } from "@builder.io/qwik";
-import { type DocumentHead } from "@builder.io/qwik-city";
+import { type DocumentHead, Link, useNavigate } from "@builder.io/qwik-city";
 import {
   createTodo,
   deleteTodo,
@@ -48,6 +48,9 @@ interface AppState {
 }
 
 export default component$(() => {
+  // The Vault link renders after auth, in the browser. Read the router
+  // during SSR so that client-only Link can resolve it.
+  useNavigate();
   const email = useSignal("");
   const password = useSignal("");
   const authBusy = useSignal(false);
@@ -417,6 +420,13 @@ export default component$(() => {
           <h1>{currentFolder?.task || "My Tasks"}</h1>
         </div>
         <div class="actions">
+          <Link
+            href="/vault"
+            class="btn gray"
+            style={{ textDecoration: "none", display: "inline-block" }}
+          >
+            Vault
+          </Link>
           {state.editMode && clipboard && (
             <button
               type="button"

@@ -38,20 +38,33 @@ class MainActivity : ComponentActivity() {
                         var isUserLoggedIn by remember {
                             mutableStateOf(FirebaseAuth.getInstance().currentUser != null)
                         }
+                        var currentScreen by remember { mutableStateOf("TODOS") }
 
                         if (isUserLoggedIn) {
                             val currentUser = FirebaseAuth.getInstance().currentUser
                             if (currentUser != null) {
-                                TodoListScreen(
-                                    userId = currentUser.uid,
-                                    uiScale = globalUiScale,
-                                    onUiScaleChange = { globalUiScale = it },
-                                    onSignOut = {
-                                        FirebaseAuth.getInstance().signOut()
-                                        isUserLoggedIn = false
-                                    },
-                                    modifier = Modifier.padding(innerPadding)
-                                )
+                                val signOut = {
+                                    FirebaseAuth.getInstance().signOut()
+                                    isUserLoggedIn = false
+                                    currentScreen = "TODOS"
+                                }
+                                if (currentScreen == "VAULT") {
+                                    VaultScreen(
+                                        userId = currentUser.uid,
+                                        onNavigateBack = { currentScreen = "TODOS" },
+                                        onSignOut = signOut,
+                                        modifier = Modifier.padding(innerPadding)
+                                    )
+                                } else {
+                                    TodoListScreen(
+                                        userId = currentUser.uid,
+                                        uiScale = globalUiScale,
+                                        onUiScaleChange = { globalUiScale = it },
+                                        onSignOut = signOut,
+                                        onNavigateToVault = { currentScreen = "VAULT" },
+                                        modifier = Modifier.padding(innerPadding)
+                                    )
+                                }
                             }
                         } else {
                             AuthScreen(

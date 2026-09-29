@@ -72,6 +72,61 @@ function collectionUrl(userId: string): string {
   return `${API_BASE_URL}/users/${encodeURIComponent(userId)}/todos`;
 }
 
+// Vault API
+
+export interface VaultFile {
+  id: string;
+  user_id: string;
+  file_name: string;
+  mime_type: string;
+  data: string;
+  created_at: string | null;
+}
+
+export async function getVaultFiles(
+  token: string,
+  userId: string,
+): Promise<VaultFile[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/users/${encodeURIComponent(userId)}/vault`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) await fail(response, "Failed to fetch files");
+  return response.json() as Promise<VaultFile[]>;
+}
+
+export async function createVaultFile(
+  token: string,
+  userId: string,
+  data: { file_name: string; mime_type: string; data: string },
+): Promise<VaultFile> {
+  const response = await fetch(
+    `${API_BASE_URL}/users/${encodeURIComponent(userId)}/vault`,
+    {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    },
+  );
+  if (!response.ok) await fail(response, "Failed to upload file");
+  return response.json() as Promise<VaultFile>;
+}
+
+export async function deleteVaultFile(
+  token: string,
+  userId: string,
+  fileId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/users/${encodeURIComponent(userId)}/vault/${encodeURIComponent(fileId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) await fail(response, "Failed to delete file");
+}
+
 function authHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,

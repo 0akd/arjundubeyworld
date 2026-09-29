@@ -8,6 +8,7 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -71,6 +72,27 @@ class TodoApiClient(
         request(
             "DELETE",
             "$baseUrl/users/${pathSegment(userId)}/todos/${pathSegment(todoId)}",
+        )
+    }
+
+    suspend fun getVaultFiles(userId: String): List<VaultFile> {
+        val body = request("GET", "$baseUrl/users/${pathSegment(userId)}/vault")
+        return TodoJson.json.decodeFromString(body)
+    }
+
+    suspend fun createVaultFile(userId: String, file: VaultFileUpload): VaultFile {
+        val body = request(
+            "POST",
+            "$baseUrl/users/${pathSegment(userId)}/vault",
+            TodoJson.json.encodeToString(file),
+        )
+        return TodoJson.json.decodeFromString(body)
+    }
+
+    suspend fun deleteVaultFile(userId: String, fileId: String) {
+        request(
+            "DELETE",
+            "$baseUrl/users/${pathSegment(userId)}/vault/${pathSegment(fileId)}",
         )
     }
 
@@ -159,3 +181,20 @@ class TodoApiClient(
             URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     }
 }
+
+@Serializable
+data class VaultFile(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("mime_type") val mimeType: String,
+    val data: String,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class VaultFileUpload(
+    @SerialName("file_name") val fileName: String,
+    @SerialName("mime_type") val mimeType: String,
+    val data: String,
+)
