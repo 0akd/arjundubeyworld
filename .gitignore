@@ -1,0 +1,66 @@
+# =========================
+# Node.js (firestore-api, notes-frontend)
+# =========================
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Cloudflare Wrangler (firestore-api)
+# =========================
+# Local state, cache, and bindings
+.wrangler/
+
+# =========================
+# Qwik / Vite / Web (notes-frontend)
+# =========================
+# Build output and caches
+dist/
+.cache/
+.vite/
+
+# Local environment variables
+.env.local
+.env.*.local
+
+# =========================
+# Android & Gradle (absolutra)
+# =========================
+# Gradle cache and wrappers
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Build output directories
+build/
+app/build/
+
+# Local configuration & Secrets
+local.properties
+google-services.json
+
+# Compiled class files & archives
+*.class
+*.dex
+*.apk
+*.ap_
+*.jar
+*.flat
+
+# =========================
+# IDEs & OS Files
+# =========================
+# JetBrains / Android Studio
+.idea/
+*.iml
+
+# VS Code (Uncomment if you don't want to share workspace settings)
+# .vscode/
+
+# macOS / Windows background files
+.DS_Store
+Thumbs.db
